@@ -1,0 +1,35 @@
+name: Publish Aftershock v0.0.22
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v0.0.22.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aftershock-release-v0.0.22
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve verified source deltas and previous releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in delta-0 delta-1 delta-2 delta-3 delta-4 build.py RELEASE_NOTES.md; do
+            gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/patches/v0.0.22/$file?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$file"
+          done
+          gh release download v0.0.19.7 --pattern 'Aftershock_Update_0.0.19.6_to_0.0.19.7.zip' --repo "$GH_REPO"
+          gh release download v0.0.19.9 --pattern 'Aftershock_Update_0.0.19.8_to_0.0.19.9.zip' --repo "$GH_REPO"
+          gh release download v0.0.21 --pattern 'Aftershock_Update_0.0.19.9_to_0.0.21.zip' --repo "$GH_REPO"
+      - name: Reconstruct and verify the tested patch
+        run: python3 build.py
+      - name: Publish Marketplace update
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.0.22 Aftershock_Update_0.0.21_to_0.0.22.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.22 - Asset Marketplace & Studio Menus' --notes-file RELEASE_NOTES.md
