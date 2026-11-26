@@ -1,0 +1,27 @@
+name: Publish Aftershock v0.0.19.9
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v0.0.19.9.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Verify and publish compatibility patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir patches
+          cd patches
+          for file in Aftershock_Update_0.0.19.8_to_0.0.19.9.zip SHA256SUMS RELEASE_NOTES.md; do
+            gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/patches/v0.0.19.9/$file?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$file"
+          done
+          sha256sum --check SHA256SUMS
+          unzip -t Aftershock_Update_0.0.19.8_to_0.0.19.9.zip
+          gh release create v0.0.19.9 Aftershock_Update_0.0.19.8_to_0.0.19.9.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.19.9 - Scanned Material Compatibility' --notes-file RELEASE_NOTES.md
