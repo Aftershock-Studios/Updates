@@ -44,6 +44,7 @@ jobs:
                   try:
                       metadata=json.loads(fetch('https://api.polyhaven.com/files/'+slug,2*1024*1024))
                       files={}
+                      print('Metadata',name,json.dumps(metadata)[:1800],flush=True)
                       for kind,aliases in maps.items():
                           candidates=[(ext,metadata.get(key,{}).get('1k',{}).get(ext)) for key in aliases for ext in ('jpg','png','jpeg')]
                           ext,info=next((ext,info) for ext,info in candidates if isinstance(info,dict) and info.get('url') and 0<info.get('size',info.get('size_bytes',0))<=8*1024*1024 and info.get('md5'))
