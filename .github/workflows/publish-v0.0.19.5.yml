@@ -1,0 +1,40 @@
+name: Publish native update checker
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v0.0.19.5.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aftershock-release-v0.0.19.5
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve and verify both patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          for version in v0.0.19.5 v0.0.19.6; do
+            if [[ "$version" == v0.0.19.5 ]]; then file=Aftershock_Update_0.0.19.4_to_0.0.19.5.zip; else file=Aftershock_Update_0.0.19.5_to_0.0.19.6.zip; fi
+            mkdir -p "$version"
+            for name in "$file" SHA256SUMS; do
+              gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/patches/$version/$name?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$version/$name"
+            done
+            (cd "$version"; sha256sum --check SHA256SUMS; unzip -t "$file")
+          done
+      - name: Publish the native update checker
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.0.19.5 v0.0.19.5/Aftershock_Update_0.0.19.4_to_0.0.19.5.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.19.5 - Native Update Checker' --notes 'Native macOS update-check panel, animated indeterminate progress, Update Now and Update Later, macOS Updates menu, and non-blocking GitHub checks. Requires v0.0.19.4.'
+      - name: Publish the optional version-only test patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.0.19.6 v0.0.19.6/Aftershock_Update_0.0.19.5_to_0.0.19.6.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.19.6 - Update Checker Test' --notes 'Optional version-only test patch for checking Update Later and Update Now from the new native dialog. No gameplay changes.'
