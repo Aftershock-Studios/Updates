@@ -1,0 +1,34 @@
+name: Publish Aftershock v0.0.19.8
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v0.0.19.8.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aftershock-release-v0.0.19.8
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve and verify exact committed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir patches
+          cd patches
+          for file in Aftershock_Update_0.0.19.7_to_0.0.19.8.zip SHA256SUMS RELEASE_NOTES.md; do
+            gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/patches/v0.0.19.8/$file?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$file"
+          done
+          sha256sum --check SHA256SUMS
+          unzip -t Aftershock_Update_0.0.19.7_to_0.0.19.8.zip
+      - name: Publish Real World Renderer update
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.0.19.8 patches/Aftershock_Update_0.0.19.7_to_0.0.19.8.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.19.8 - Real World Renderer I' --notes-file patches/RELEASE_NOTES.md
