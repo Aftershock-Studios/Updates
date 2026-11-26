@@ -1,0 +1,33 @@
+name: Publish Aftershock v0.0.19.4
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v0.0.19.4.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aftershock-release-v0.0.19.4
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve and verify committed patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir patches
+          cd patches
+          for file in Aftershock_Update_0.0.19.2_to_0.0.19.4.zip Aftershock_Update_0.0.19.3_to_0.0.19.4.zip SHA256SUMS; do
+            gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/patches/v0.0.19.4/$file?ref=$GITHUB_SHA" > "$file"
+          done
+          sha256sum --check SHA256SUMS
+      - name: Publish verified update ZIPs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.0.19.4 patches/Aftershock_Update_0.0.19.2_to_0.0.19.4.zip patches/Aftershock_Update_0.0.19.3_to_0.0.19.4.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.19.4 - Atmospheric Realism' --notes 'Improved clouds, sunsets, atmospheric haze, wet road reflections and rain-dependent surface shading. Compatible with v0.0.19.2 and v0.0.19.3.'
