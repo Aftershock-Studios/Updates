@@ -23,7 +23,7 @@ jobs:
           mkdir patches
           cd patches
           for file in Aftershock_Update_0.0.19.2_to_0.0.19.4.zip Aftershock_Update_0.0.19.3_to_0.0.19.4.zip SHA256SUMS; do
-            gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/patches/v0.0.19.4/$file?ref=$GITHUB_SHA" > "$file"
+            gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/patches/v0.0.19.4/$file?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$file"
           done
           sha256sum --check SHA256SUMS
       - name: Publish verified update ZIPs
