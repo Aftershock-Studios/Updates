@@ -1,0 +1,36 @@
+name: Publish Aftershock v0.0.21
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v0.0.21.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aftershock-release-v0.0.21
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve verified source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          fetch_file() {
+            gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/$1?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$2"
+          }
+          fetch_file patches/v0.0.20/Aftershock_Update_0.0.19.9_to_0.0.20.zip base20.zip
+          fetch_file patches/v0.0.19.8/Aftershock_Update_0.0.19.7_to_0.0.19.8.zip base198.zip
+          fetch_file patches/v0.0.21/source.delta source.delta
+          fetch_file patches/v0.0.21/build.py build.py
+          fetch_file patches/v0.0.21/RELEASE_NOTES.md RELEASE_NOTES.md
+          python3 build.py
+      - name: Publish verified engine patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.0.21 Aftershock_Update_0.0.20_to_0.0.21.zip Aftershock_Update_0.0.19.9_to_0.0.21.zip --repo "$GH_REPO" --target "$GITHUB_SHA" --title 'Aftershock v0.0.21 - Studio Controls & Navigation' --notes-file RELEASE_NOTES.md
