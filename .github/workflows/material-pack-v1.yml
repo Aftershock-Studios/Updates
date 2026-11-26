@@ -46,14 +46,14 @@ jobs:
                       files={}
                       for kind,aliases in maps.items():
                           candidates=[(ext,metadata.get(key,{}).get('1k',{}).get(ext)) for key in aliases for ext in ('jpg','png','jpeg')]
-                          ext,info=next((ext,info) for ext,info in candidates if isinstance(info,dict) and info.get('url') and 0<info.get('size',0)<=8*1024*1024 and info.get('md5'))
+                          ext,info=next((ext,info) for ext,info in candidates if isinstance(info,dict) and info.get('url') and 0<info.get('size',info.get('size_bytes',0))<=8*1024*1024 and info.get('md5'))
                           data=fetch(info['url'],8*1024*1024)
-                          if len(data)!=info['size'] or hashlib.md5(data).hexdigest()!=info['md5'].lower():raise ValueError('Provider checksum mismatch')
+                          if len(data)!=info.get('size',info.get('size_bytes')) or hashlib.md5(data).hexdigest()!=info['md5'].lower():raise ValueError('Provider checksum mismatch')
                           files[name+'/'+kind+'.'+ext]=data
                       for path,data in files.items():z.writestr(path,data)
                       manifest[name]={'source':'https://polyhaven.com/a/'+slug,'license':'CC0-1.0','files':{path:hashlib.sha256(data).hexdigest() for path,data in files.items()}}
                       print('Verified',name,flush=True)
-                  except Exception as exc:print('Skipping',name,str(exc),flush=True)
+                  except Exception as exc:print('Skipping',name,repr(exc),flush=True)
               if not manifest:raise SystemExit('No verified assets retrieved')
               z.writestr('manifest.json',json.dumps(manifest,indent=2))
               z.writestr('CREDITS.txt','Materials by Poly Haven (https://polyhaven.com), CC0 1.0. See manifest.json for original source pages and file hashes.')
