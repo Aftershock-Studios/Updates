@@ -1,0 +1,93 @@
+name: Compile complete World Materials and Meshes library
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/world-assets-v1.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: aftershock-world-assets-v1
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Create optional draft asset release
+        run: |
+          gh release create world-assets-v1 --repo "$GH_REPO" --target "$GITHUB_SHA" --draft --latest=false --title 'Aftershock World Assets I - Complete 1K Library' --notes 'Optional original CC0 procedural asset packs for v0.0.24 or later. Eight 128-material packs, 4,096 PBR maps and a separate textured mesh archive. Studio can also generate these assets locally without downloading the packs. This is not an engine update.'
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        pack: [1, 2, 3, 4, 5, 6, 7, 8, meshes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PACK: ${{ matrix.pack }}
+    steps:
+      - name: Fetch exact tested generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=Aftershock_Update_0.0.23_to_0.0.24.zip
+          gh api -H 'Accept: application/vnd.github+json' "repos/$GH_REPO/contents/patches/v0.0.24/$file?ref=$GITHUB_SHA" --jq '.content' | base64 --decode > "$file"
+          echo '3cb1116439c84fb2b6ebe5c462203e719a751cf3e82ba4930f4443400413dd79  '"$file" | sha256sum --check
+          unzip -q "$file" 'payload/engine/world_assets.py' 'payload/engine/world_meshes.py'
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check numpy==2.3.5 Pillow==12.3.0 trimesh==4.11.1
+      - name: Compile and validate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$PACK" != meshes ]]; then
+            name=$(printf 'Aftershock_World_Materials_%02d_1K.zip' "$PACK")
+            .venv/bin/python payload/engine/world_assets.py "$name" --start "$(( (PACK - 1) * 128 ))" --end "$(( PACK * 128 ))" --size 1024 --workers 2
+          else
+            name=Aftershock_World_Meshes_512.zip
+            PYTHONPATH=payload .venv/bin/python - <<'PY'
+          from engine.world_meshes import export_prop,catalog,COUNT
+          import zipfile,tempfile,hashlib,json
+          from pathlib import Path
+          name='Aftershock_World_Meshes_512.zip'
+          manifest={}
+          with tempfile.TemporaryDirectory() as t,zipfile.ZipFile(name,'w',zipfile.ZIP_STORED) as z:
+              for i in range(COUNT):
+                  item=catalog()[i];p=export_prop(i,Path(t)/(item['name']+'.glb'));data=p.read_bytes()
+                  z.writestr(p.name,data);manifest[p.name]=dict(item,sha256=hashlib.sha256(data).hexdigest());p.unlink()
+              z.writestr('manifest.json',json.dumps(manifest,indent=2))
+              z.writestr('LICENSE.txt','Original procedural meshes and materials, CC0 1.0.')
+          with zipfile.ZipFile(name) as z:
+              assert z.testzip() is None
+              assert len(z.namelist()) == COUNT+2
+          PY
+          fi
+          sha256sum "$name"
+          gh release upload world-assets-v1 "$name" --repo "$GH_REPO"
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Verify all nine archives and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release view world-assets-v1 --repo "$GH_REPO" --json assets > assets.json
+          python3 - <<'PY'
+          import json
+          expected={f'Aftershock_World_Materials_{i:02d}_1K.zip' for i in range(1,9)}|{'Aftershock_World_Meshes_512.zip'}
+          assets=json.load(open('assets.json'))['assets']
+          assert {a['name'] for a in assets}==expected
+          assert all(a['size']>0 for a in assets)
+          PY
+          gh release edit world-assets-v1 --repo "$GH_REPO" --draft=false --latest=false
